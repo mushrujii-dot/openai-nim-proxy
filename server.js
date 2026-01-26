@@ -36,20 +36,20 @@ app.use((req, res, next) => {
 const NIM_API_BASE = process.env.NIM_API_BASE || 'https://integrate.api.nvidia.com/v1';
 const NIM_API_KEY = process.env.NIM_API_KEY;
 
-// 🔥 REASONING DISPLAY TOGGLE - Shows/hides reasoning in output
-const SHOW_REASONING = true; // Set to true to see thinking process
+// REASONING DISPLAY TOGGLE - Shows/hides reasoning in output
+const SHOW_REASONING = true;
 
-// 🔥 THINKING MODE TOGGLE - Enables thinking for specific models that support it
-const ENABLE_THINKING_MODE = true; // Set to true for models with thinking toggle
+// THINKING MODE TOGGLE - Enables thinking for specific models that support it
+const ENABLE_THINKING_MODE = true;
 
-// Model mapping - BEST RP MODELS
+// Model mapping - TESTED RP MODELS
 const MODEL_MAPPING = {
   'gpt-3.5-turbo': 'deepseek-ai/deepseek-v3',
   'gpt-4': 'deepseek-ai/deepseek-v3.1',
-  'gpt-4-turbo': 'moonshotai/kimi-k2-thinking-0905',  // ← THINKING version
+  'gpt-4-turbo': 'moonshotai/kimi-k2-thinking-0905',
   'gpt-4o': 'deepseek-ai/deepseek-v3.1',
-  'claude-3-opus': 'anthropic/claude-4-opus-20250514',
-  'claude-3-sonnet': 'moonshotai/kimi-k2-instruct-0905',  // ← INSTRUCT version
+  'claude-3-opus': 'nvidia/llama-3.1-nemotron-ultra-253b-v1',
+  'claude-3-sonnet': 'moonshotai/kimi-k2-instruct-0905',
   'gemini-pro': 'qwen/qwen3-next-80b-a3b-thinking'
 };
 
@@ -98,7 +98,7 @@ app.post('/v1/chat/completions', async (req, res) => {
     let nimModel = MODEL_MAPPING[model] || 'meta/llama-3.1-8b-instruct';
     console.log(`[NVIDIA] Using model: ${nimModel}`);
     
-   // Transform request
+    // Transform request
     const nimRequest = {
       model: nimModel,
       messages: messages,
@@ -127,10 +127,10 @@ app.post('/v1/chat/completions', async (req, res) => {
     console.log(`[NVIDIA] Response status: ${response.status}`);
     
     if (response.status !== 200) {
-      console.error(`[ERROR] ${response.status}: ${JSON.stringify(response.data)}`);
+      console.error(`[ERROR] ${response.status}`);
       return res.status(response.status).json({
         error: {
-          message: response.data?.error?.message || 'NVIDIA API error',
+          message: 'NVIDIA API error',
           type: 'api_error',
           code: response.status
         }
@@ -160,7 +160,7 @@ app.post('/v1/chat/completions', async (req, res) => {
             
             try {
               const data = JSON.parse(line.slice(6));
-              if (data.choices?.[0]?.delta) {
+              if (data.choices && data.choices[0] && data.choices[0].delta) {
                 const reasoning = data.choices[0].delta.reasoning_content;
                 const content = data.choices[0].delta.content;
                 
@@ -208,13 +208,13 @@ app.post('/v1/chat/completions', async (req, res) => {
       });
       
       response.data.on('error', (err) => {
-        console.error('[STREAM ERROR]', err);
+        console.error('[STREAM ERROR]', err.message);
         res.end();
       });
     } else {
       // Non-streaming response
       if (!response.data || !response.data.choices) {
-        console.error(`[INVALID] Missing choices:`, response.data);
+        console.error(`[INVALID] Missing choices`);
         return res.status(500).json({
           error: {
             message: 'Invalid response from NVIDIA',
@@ -271,25 +271,13 @@ app.post('/v1/chat/completions', async (req, res) => {
       });
     }
     
-    // Handle NVIDIA API errors safely
+    // Handle other errors safely
     let errorMessage = error.message || 'Internal server error';
     let errorStatus = 500;
     
     if (error.response) {
       errorStatus = error.response.status || 500;
-      
-      // Safely extract error message
-      try {
-        if (error.response.data?.error?.message) {
-          errorMessage = error.response.data.error.message;
-        } else if (typeof error.response.data === 'string') {
-          errorMessage = error.response.data;
-        } else {
-          errorMessage = `NVIDIA API error (${errorStatus})`;
-        }
-      } catch (e) {
-        errorMessage = `NVIDIA API error (${errorStatus})`;
-      }
+      errorMessage = `NVIDIA API error (${errorStatus})`;
     }
     
     return res.status(errorStatus).json({
@@ -297,16 +285,6 @@ app.post('/v1/chat/completions', async (req, res) => {
         message: errorMessage,
         type: 'proxy_error',
         code: errorStatus
-      }
-    });
-  }
-
-    
-    res.status(error.response?.status || 500).json({
-      error: {
-        message: error.message || 'Internal server error',
-        type: 'proxy_error',
-        code: 500
       }
     });
   }
@@ -327,6 +305,7 @@ app.all('*', (req, res) => {
 const server = app.listen(PORT, () => {
   console.log(`OpenAI to NVIDIA NIM Proxy running on port ${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/health`);
+  console.log(`Reasoning: ${SHOW_REASONING}, Thinking: ${ENABLE_THINKING_MODE}`);
 });
 
 server.timeout = 120000;
