@@ -32,6 +32,14 @@ const MODEL_MAPPING = {
 };
 
 // Health check endpoint
+// Root endpoint for connection tests
+   app.get('/', (req, res) => {
+     res.json({ 
+       status: 'ok', 
+       service: 'OpenAI to NVIDIA NIM Proxy',
+       message: 'Proxy is running. Use /v1/chat/completions endpoint.'
+     });
+   });
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
