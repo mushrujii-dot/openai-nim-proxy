@@ -36,15 +36,21 @@ app.use((req, res, next) => {
 const NIM_API_BASE = process.env.NIM_API_BASE || 'https://integrate.api.nvidia.com/v1';
 const NIM_API_KEY = process.env.NIM_API_KEY;
 
-// Model mapping - FAST MODELS
+// 🔥 REASONING DISPLAY TOGGLE - Shows/hides reasoning in output
+const SHOW_REASONING = true; // Set to true to see thinking process
+
+// 🔥 THINKING MODE TOGGLE - Enables thinking for specific models that support it
+const ENABLE_THINKING_MODE = true; // Set to true for models with thinking toggle
+
+// Model mapping - BEST RP MODELS
 const MODEL_MAPPING = {
-  'gpt-3.5-turbo': 'meta/llama-3.1-8b-instruct',
-  'gpt-4': 'meta/llama-3.1-70b-instruct',
-  'gpt-4-turbo': 'meta/llama-3.3-70b-instruct',
-  'gpt-4o': 'meta/llama-3.3-70b-instruct',
-  'claude-3-opus': 'meta/llama-3.1-70b-instruct',
-  'claude-3-sonnet': 'meta/llama-3.1-8b-instruct',
-  'gemini-pro': 'nvidia/llama-3.1-nemotron-70b-instruct'
+  'gpt-3.5-turbo': 'deepseek-ai/deepseek-v3',
+  'gpt-4': 'deepseek-ai/deepseek-v3.1',
+  'gpt-4-turbo': 'moonshotai/kimi-k2-instruct-0905',
+  'gpt-4o': 'deepseek-ai/deepseek-v3.1',
+  'claude-3-opus': 'anthropic/claude-4-opus-20250514',
+  'claude-3-sonnet': 'moonshotai/kimi-k2-instruct-0905',
+  'gemini-pro': 'qwen/qwen3-next-80b-a3b-thinking'
 };
 
 // Root endpoint
@@ -60,7 +66,9 @@ app.get('/', (req, res) => {
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
-    service: 'OpenAI to NVIDIA NIM Proxy'
+    service: 'OpenAI to NVIDIA NIM Proxy',
+    reasoning_display: SHOW_REASONING,
+    thinking_mode: ENABLE_THINKING_MODE
   });
 });
 
@@ -90,13 +98,14 @@ app.post('/v1/chat/completions', async (req, res) => {
     let nimModel = MODEL_MAPPING[model] || 'meta/llama-3.1-8b-instruct';
     console.log(`[NVIDIA] Using model: ${nimModel}`);
     
-    // Transform request
+   // Transform request
     const nimRequest = {
       model: nimModel,
       messages: messages,
       temperature: temperature || 0.7,
       top_p: 1,
       max_tokens: Math.min(max_tokens || 1024, 2048),
+      extra_body: ENABLE_THINKING_MODE ? { chat_template_kwargs: { thinking: true } } : undefined,
       stream: stream || false
     };
     
@@ -134,8 +143,63 @@ app.post('/v1/chat/completions', async (req, res) => {
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
       
+      let buffer = '';
+      let reasoningStarted = false;
+      
       response.data.on('data', (chunk) => {
-        res.write(chunk);
+        buffer += chunk.toString();
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        
+        lines.forEach(line => {
+          if (line.startsWith('data: ')) {
+            if (line.includes('[DONE]')) {
+              res.write(line + '\n\n');
+              return;
+            }
+            
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.choices?.[0]?.delta) {
+                const reasoning = data.choices[0].delta.reasoning_content;
+                const content = data.choices[0].delta.content;
+                
+                if (SHOW_REASONING) {
+                  let combinedContent = '';
+                  
+                  if (reasoning && !reasoningStarted) {
+                    combinedContent = '<think>\n' + reasoning;
+                    reasoningStarted = true;
+                  } else if (reasoning) {
+                    combinedContent = reasoning;
+                  }
+                  
+                  if (content && reasoningStarted) {
+                    combinedContent += '</think>\n\n' + content;
+                    reasoningStarted = false;
+                  } else if (content) {
+                    combinedContent += content;
+                  }
+                  
+                  if (combinedContent) {
+                    data.choices[0].delta.content = combinedContent;
+                    delete data.choices[0].delta.reasoning_content;
+                  }
+                } else {
+                  if (content) {
+                    data.choices[0].delta.content = content;
+                  } else {
+                    data.choices[0].delta.content = '';
+                  }
+                  delete data.choices[0].delta.reasoning_content;
+                }
+              }
+              res.write(`data: ${JSON.stringify(data)}\n\n`);
+            } catch (e) {
+              res.write(line + '\n\n');
+            }
+          }
+        });
       });
       
       response.data.on('end', () => {
@@ -165,14 +229,22 @@ app.post('/v1/chat/completions', async (req, res) => {
         object: 'chat.completion',
         created: Math.floor(Date.now() / 1000),
         model: model,
-        choices: response.data.choices.map(choice => ({
-          index: choice.index || 0,
-          message: {
-            role: choice.message?.role || 'assistant',
-            content: choice.message?.content || ''
-          },
-          finish_reason: choice.finish_reason || 'stop'
-        })),
+        choices: response.data.choices.map(choice => {
+          let fullContent = choice.message?.content || '';
+          
+          if (SHOW_REASONING && choice.message?.reasoning_content) {
+            fullContent = '<think>\n' + choice.message.reasoning_content + '\n</think>\n\n' + fullContent;
+          }
+          
+          return {
+            index: choice.index || 0,
+            message: {
+              role: choice.message?.role || 'assistant',
+              content: fullContent
+            },
+            finish_reason: choice.finish_reason || 'stop'
+          };
+        }),
         usage: response.data.usage || {
           prompt_tokens: 0,
           completion_tokens: 0,
