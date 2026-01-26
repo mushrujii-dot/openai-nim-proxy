@@ -42,7 +42,7 @@ const SHOW_REASONING = true; // Set to true to see thinking process
 // 🔥 THINKING MODE TOGGLE - Enables thinking for specific models that support it
 const ENABLE_THINKING_MODE = true; // Set to true for models with thinking toggle
 
-javascript// Model mapping - BEST RP MODELS
+// Model mapping - BEST RP MODELS
 const MODEL_MAPPING = {
   'gpt-3.5-turbo': 'deepseek-ai/deepseek-v3',
   'gpt-4': 'deepseek-ai/deepseek-v3.1',
