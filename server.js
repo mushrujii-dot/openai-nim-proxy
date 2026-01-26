@@ -104,7 +104,7 @@ app.post('/v1/chat/completions', async (req, res) => {
       messages: messages,
       temperature: temperature || 0.7,
       top_p: 1,
-      max_tokens: Math.min(max_tokens || 1024, 2048),
+      max_tokens: max_tokens || 4096,  // Remove the cap, default to 4096
       extra_body: ENABLE_THINKING_MODE ? { chat_template_kwargs: { thinking: true } } : undefined,
       stream: stream || false
     };
