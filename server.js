@@ -42,14 +42,14 @@ const SHOW_REASONING = true; // Set to true to see thinking process
 // 🔥 THINKING MODE TOGGLE - Enables thinking for specific models that support it
 const ENABLE_THINKING_MODE = true; // Set to true for models with thinking toggle
 
-// Model mapping - BEST RP MODELS
+javascript// Model mapping - BEST RP MODELS
 const MODEL_MAPPING = {
   'gpt-3.5-turbo': 'deepseek-ai/deepseek-v3',
   'gpt-4': 'deepseek-ai/deepseek-v3.1',
-  'gpt-4-turbo': 'moonshotai/kimi-k2-instruct-0905',
+  'gpt-4-turbo': 'moonshotai/kimi-k2-thinking-0905',  // ← THINKING version
   'gpt-4o': 'deepseek-ai/deepseek-v3.1',
   'claude-3-opus': 'anthropic/claude-4-opus-20250514',
-  'claude-3-sonnet': 'moonshotai/kimi-k2-instruct-0905',
+  'claude-3-sonnet': 'moonshotai/kimi-k2-instruct-0905',  // ← INSTRUCT version
   'gemini-pro': 'qwen/qwen3-next-80b-a3b-thinking'
 };
 
