@@ -66,58 +66,180 @@ app.get('/v1/models', (req, res) => {
 });
 
 // Chat completions endpoint (main proxy)
+// Chat completions endpoint (main proxy)
 app.post('/v1/chat/completions', async (req, res) => {
   try {
     const { model, messages, temperature, max_tokens, stream } = req.body;
     
+    console.log(`[REQUEST] Model: ${model}, Stream: ${stream}, MaxTokens: ${max_tokens}`);
+    
     // Smart model selection with fallback
     let nimModel = MODEL_MAPPING[model];
     if (!nimModel) {
-      try {
-        await axios.post(`${NIM_API_BASE}/chat/completions`, {
-          model: model,
-          messages: [{ role: 'user', content: 'test' }],
-          max_tokens: 1
-        }, {
-          headers: { 'Authorization': `Bearer ${NIM_API_KEY}`, 'Content-Type': 'application/json' },
-          validateStatus: (status) => status < 500
-        }).then(res => {
-          if (res.status >= 200 && res.status < 300) {
-            nimModel = model;
-          }
-        });
-      } catch (e) {}
-      
-      if (!nimModel) {
-        const modelLower = model.toLowerCase();
-        if (modelLower.includes('gpt-4') || modelLower.includes('claude-opus') || modelLower.includes('405b')) {
-          nimModel = 'meta/llama-3.1-405b-instruct';
-        } else if (modelLower.includes('claude') || modelLower.includes('gemini') || modelLower.includes('70b')) {
-          nimModel = 'meta/llama-3.1-70b-instruct';
-        } else {
-          nimModel = 'meta/llama-3.1-8b-instruct';
-        }
+      console.log(`[MODEL] No mapping found for ${model}, using fallback`);
+      const modelLower = model.toLowerCase();
+      if (modelLower.includes('gpt-4') || modelLower.includes('claude-opus')) {
+        nimModel = 'meta/llama-3.1-70b-instruct';
+      } else {
+        nimModel = 'meta/llama-3.1-8b-instruct';
       }
     }
+    
+    console.log(`[NVIDIA] Using model: ${nimModel}`);
     
     // Transform OpenAI request to NIM format
     const nimRequest = {
       model: nimModel,
       messages: messages,
-      temperature: temperature || 0.6,
-      max_tokens: max_tokens || 9024,
-      extra_body: ENABLE_THINKING_MODE ? { chat_template_kwargs: { thinking: true } } : undefined,
+      temperature: temperature || 0.7,
+      top_p: 1,
+      max_tokens: Math.min(max_tokens || 1024, 2048), // Cap at 2048
       stream: stream || false
     };
     
-    // Make request to NVIDIA NIM API
+    console.log(`[API CALL] Starting request to NVIDIA...`);
+    
+    // Make request to NVIDIA NIM API with timeout handling
     const response = await axios.post(`${NIM_API_BASE}/chat/completions`, nimRequest, {
       headers: {
         'Authorization': `Bearer ${NIM_API_KEY}`,
         'Content-Type': 'application/json'
       },
-      responseType: stream ? 'stream' : 'json'
+      responseType: stream ? 'stream' : 'json',
+      timeout: 90000, // 90 second timeout
+      httpAgent: httpAgent,
+      httpsAgent: httpsAgent,
+      validateStatus: function (status) {
+        return status < 600; // Accept any status less than 600
+      }
     });
+    
+    console.log(`[NVIDIA RESPONSE] Status: ${response.status}`);
+    
+    // Check if NVIDIA returned an error
+    if (response.status !== 200) {
+      console.error(`[NVIDIA ERROR] ${response.status}: ${JSON.stringify(response.data)}`);
+      return res.status(response.status).json({
+        error: {
+          message: response.data?.error?.message || 'NVIDIA API error',
+          type: 'api_error',
+          code: response.status
+        }
+      });
+    }
+    
+    if (stream) {
+      console.log(`[STREAM] Starting stream response`);
+      // Handle streaming response
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      
+      let chunkCount = 0;
+      
+      response.data.on('data', (chunk) => {
+        chunkCount++;
+        const lines = chunk.toString().split('\n').filter(line => line.trim());
+        
+        lines.forEach(line => {
+          if (line.startsWith('data: ')) {
+            res.write(line + '\n\n');
+          }
+        });
+      });
+      
+      response.data.on('end', () => {
+        console.log(`[STREAM] Completed. Chunks sent: ${chunkCount}`);
+        res.end();
+      });
+      
+      response.data.on('error', (err) => {
+        console.error('[STREAM ERROR]', err);
+        if (!res.headersSent) {
+          res.status(500).json({ error: { message: 'Stream error occurred' } });
+        }
+        res.end();
+      });
+    } else {
+      console.log(`[NON-STREAM] Processing response`);
+      
+      // Validate response structure
+      if (!response.data || !response.data.choices || !Array.isArray(response.data.choices)) {
+        console.error(`[INVALID RESPONSE] Missing choices array:`, JSON.stringify(response.data));
+        return res.status(500).json({
+          error: {
+            message: 'Invalid response from NVIDIA API',
+            type: 'api_error',
+            code: 500
+          }
+        });
+      }
+      
+      // Transform NIM response to OpenAI format
+      const openaiResponse = {
+        id: `chatcmpl-${Date.now()}`,
+        object: 'chat.completion',
+        created: Math.floor(Date.now() / 1000),
+        model: model,
+        choices: response.data.choices.map(choice => ({
+          index: choice.index || 0,
+          message: {
+            role: choice.message?.role || 'assistant',
+            content: choice.message?.content || ''
+          },
+          finish_reason: choice.finish_reason || 'stop'
+        })),
+        usage: response.data.usage || {
+          prompt_tokens: 0,
+          completion_tokens: 0,
+          total_tokens: 0
+        }
+      };
+      
+      console.log(`[SUCCESS] Response length: ${openaiResponse.choices[0].message.content.length} chars`);
+      res.json(openaiResponse);
+    }
+    
+  } catch (error) {
+    console.error('[PROXY ERROR]', error.message);
+    console.error('[ERROR DETAILS]', {
+      code: error.code,
+      status: error.response?.status,
+      data: error.response?.data
+    });
+    
+    // Handle timeout specifically
+    if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+      return res.status(504).json({
+        error: {
+          message: 'Request timed out. Try a shorter prompt or smaller max_tokens.',
+          type: 'timeout_error',
+          code: 504
+        }
+      });
+    }
+    
+    // Handle NVIDIA API errors
+    if (error.response?.data) {
+      return res.status(error.response.status || 500).json({
+        error: {
+          message: error.response.data.error?.message || error.message,
+          type: 'api_error',
+          code: error.response.status || 500
+        }
+      });
+    }
+    
+    res.status(500).json({
+      error: {
+        message: error.message || 'Internal server error',
+        type: 'proxy_error',
+        code: 500
+      }
+    });
+  }
+});
+```
     
     if (stream) {
       // Handle streaming response with reasoning
