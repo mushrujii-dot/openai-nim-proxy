@@ -30,7 +30,7 @@ const MODEL_MAPPING = {
   'claude-3-sonnet': 'meta/llama-3.1-8b-instruct',
   'gemini-pro': 'nvidia/llama-3.1-nemotron-70b-instruct'
 };
-};
+
 
 // Health check endpoint
 // Root endpoint for connection tests
