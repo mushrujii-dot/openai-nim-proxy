@@ -258,7 +258,9 @@ app.post('/v1/chat/completions', async (req, res) => {
     
   } catch (error) {
     console.error('[ERROR]', error.message);
+    console.error('[ERROR CODE]', error.code);
     
+    // Handle timeout
     if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
       return res.status(504).json({
         error: {
@@ -268,6 +270,37 @@ app.post('/v1/chat/completions', async (req, res) => {
         }
       });
     }
+    
+    // Handle NVIDIA API errors safely
+    let errorMessage = error.message || 'Internal server error';
+    let errorStatus = 500;
+    
+    if (error.response) {
+      errorStatus = error.response.status || 500;
+      
+      // Safely extract error message
+      try {
+        if (error.response.data?.error?.message) {
+          errorMessage = error.response.data.error.message;
+        } else if (typeof error.response.data === 'string') {
+          errorMessage = error.response.data;
+        } else {
+          errorMessage = `NVIDIA API error (${errorStatus})`;
+        }
+      } catch (e) {
+        errorMessage = `NVIDIA API error (${errorStatus})`;
+      }
+    }
+    
+    return res.status(errorStatus).json({
+      error: {
+        message: errorMessage,
+        type: 'proxy_error',
+        code: errorStatus
+      }
+    });
+  }
+
     
     res.status(error.response?.status || 500).json({
       error: {
