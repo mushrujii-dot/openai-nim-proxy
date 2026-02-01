@@ -49,7 +49,7 @@ const MODEL_MAPPING = {
   'gpt-4-turbo': 'moonshotai/kimi-k2-thinking',
   'gpt-4o': 'deepseek-ai/deepseek-v3.1',
   'claude-3-opus': 'nvidia/llama-3.1-nemotron-ultra-253b-v1',
-  'claude-3-sonnet': 'moonshotai/kimi-k2-instruct-0905',
+  'claude-3-sonnet': 'moonshotai/kimi-k2-instruct',
   'gemini-pro': 'qwen/qwen3-next-80b-a3b-thinking'
 };
 
@@ -104,7 +104,7 @@ app.post('/v1/chat/completions', async (req, res) => {
       messages: messages,
       temperature: temperature || 0.7,
       top_p: 1,
-      max_tokens: max_tokens || 4096,  // Remove the cap, default to 4096
+      max_tokens: max_tokens || 4096,
       extra_body: ENABLE_THINKING_MODE ? { chat_template_kwargs: { thinking: true } } : undefined,
       stream: stream || false
     };
@@ -168,14 +168,27 @@ app.post('/v1/chat/completions', async (req, res) => {
                   let combinedContent = '';
                   
                   if (reasoning && !reasoningStarted) {
-                    combinedContent = '<think>\n' + reasoning;
+                    // Clean up malformed thinking - remove duplicate <think> tags
+                    let cleanReasoning = reasoning
+                      .replace(/<think>/gi, '')
+                      .replace(/<\/think>/gi, '')
+                      .replace(/\n{3,}/g, '\n\n')
+                      .trim();
+                    
+                    combinedContent = '<think>\n' + cleanReasoning;
                     reasoningStarted = true;
                   } else if (reasoning) {
-                    combinedContent = reasoning;
+                    let cleanReasoning = reasoning
+                      .replace(/<think>/gi, '')
+                      .replace(/<\/think>/gi, '')
+                      .replace(/\n{3,}/g, '\n\n')
+                      .trim();
+                    
+                    combinedContent = '\n' + cleanReasoning;
                   }
                   
                   if (content && reasoningStarted) {
-                    combinedContent += '</think>\n\n' + content;
+                    combinedContent += '\n</think>\n\n' + content;
                     reasoningStarted = false;
                   } else if (content) {
                     combinedContent += content;
@@ -233,7 +246,14 @@ app.post('/v1/chat/completions', async (req, res) => {
           let fullContent = choice.message?.content || '';
           
           if (SHOW_REASONING && choice.message?.reasoning_content) {
-            fullContent = '<think>\n' + choice.message.reasoning_content + '\n</think>\n\n' + fullContent;
+            // Clean up malformed thinking tags
+            let cleanReasoning = choice.message.reasoning_content
+              .replace(/<think>/gi, '')
+              .replace(/<\/think>/gi, '')
+              .replace(/\n{3,}/g, '\n\n')
+              .trim();
+            
+            fullContent = '<think>\n' + cleanReasoning + '\n</think>\n\n' + fullContent;
           }
           
           return {
