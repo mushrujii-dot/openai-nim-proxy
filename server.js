@@ -37,10 +37,10 @@ const NIM_API_BASE = process.env.NIM_API_BASE || 'https://integrate.api.nvidia.c
 const NIM_API_KEY = process.env.NIM_API_KEY;
 
 // REASONING DISPLAY TOGGLE - Shows/hides reasoning in output
-const SHOW_REASONING = false;
+const SHOW_REASONING = true;
 
 // THINKING MODE TOGGLE - Enables thinking for specific models that support it
-const ENABLE_THINKING_MODE = false;
+const ENABLE_THINKING_MODE = true;
 
 // Model mapping - TESTED RP MODELS
 const MODEL_MAPPING = {
@@ -118,8 +118,7 @@ app.post('/v1/chat/completions', async (req, res) => {
         'Content-Type': 'application/json'
       },
       responseType: stream ? 'stream' : 'json',
-      timeout: 90000,
-      httpAgent: httpAgent,
+      timeout: 180000,  
       httpsAgent: httpsAgent,
       validateStatus: (status) => status < 600
     });
@@ -280,16 +279,16 @@ app.post('/v1/chat/completions', async (req, res) => {
     console.error('[ERROR]', error.message);
     console.error('[ERROR CODE]', error.code);
     
-    // Handle timeout
-    if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
-      return res.status(504).json({
-        error: {
-          message: 'Request timed out',
-          type: 'timeout_error',
-          code: 504
-        }
-      });
+   // Handle timeout
+if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+  return res.status(504).json({
+    error: {
+      message: 'kimi died oops 💀 (try again, nvidia is just slow rn)',
+      type: 'timeout_error',
+      code: 504
     }
+  });
+}
     
     // Handle other errors safely
     let errorMessage = error.message || 'Internal server error';
@@ -328,6 +327,6 @@ const server = app.listen(PORT, () => {
   console.log(`Reasoning: ${SHOW_REASONING}, Thinking: ${ENABLE_THINKING_MODE}`);
 });
 
-server.timeout = 120000;
-server.keepAliveTimeout = 65000;
-server.headersTimeout = 66000;
+server.timeout = 180000;
+server.keepAliveTimeout = 120000;
+server.headersTimeout = 125000;
