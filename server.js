@@ -40,13 +40,13 @@ const NIM_API_KEY = process.env.NIM_API_KEY;
 const SHOW_REASONING = false;
 
 // THINKING MODE TOGGLE - Enables thinking for specific models that support it
-const ENABLE_THINKING_MODE = false;
+const ENABLE_THINKING_MODE = true;
 
 // Model mapping - TESTED RP MODELS
 const MODEL_MAPPING = {
-  'gpt-3.5-turbo': 'deepseek-ai/deepseek-v3.1-terminus',
+  'gpt-3.5-turbo': 'qwen/qwen3.5-397b-a17b',
   'gpt-4': 'deepseek-ai/deepseek-v3.1',
-  'gpt-4-turbo': 'moonshotai/kimi-k2-thinking',
+  'gpt-4-turbo': 'qwen/qwen3.5-122b-a10b',
   'gpt-4o': 'z-ai/glm5',
   'claude-3-opus': 'deepseek-ai/deepseek-v3.2',
   'claude-3-sonnet': 'moonshotai/kimi-k2.5',
@@ -109,7 +109,7 @@ app.post('/v1/chat/completions', async (req, res) => {
       stream: stream || false
     };
     
-    console.log(`[API CALL] Starting request...`);
+    console.log(`[API CALL] Starting request meow meow...`);
     
     // Make request to NVIDIA
     const response = await axios.post(`${NIM_API_BASE}/chat/completions`, nimRequest, {
@@ -129,7 +129,7 @@ app.post('/v1/chat/completions', async (req, res) => {
       console.error(`[ERROR] ${response.status}`);
       return res.status(response.status).json({
         error: {
-          message: 'NVIDIA API error',
+          message: 'NVIDIA API error noooo',
           type: 'api_error',
           code: response.status
         }
@@ -296,7 +296,7 @@ if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
     
     if (error.response) {
       errorStatus = error.response.status || 500;
-      errorMessage = `NVIDIA API error (${errorStatus})`;
+      errorMessage = `NVIDIA API error noooo (${errorStatus})`;
     }
     
     return res.status(errorStatus).json({
