@@ -45,7 +45,7 @@ const ENABLE_THINKING_MODE = false;
 // Model mapping - TESTED RP MODELS
 const MODEL_MAPPING = {
   'gpt-3.5-turbo': 'qwen/qwen3.5-397b-a17b',
-  'gpt-4': 'deepseek-ai/deepseek-v3.1',
+  'gpt-4': 'moonshitai/kimi-k2-thinking',
   'gpt-4-turbo': 'qwen/qwen3.5-122b-a10b',
   'gpt-4o': 'z-ai/glm5',
   'claude-3-opus': 'deepseek-ai/deepseek-v3.2',
