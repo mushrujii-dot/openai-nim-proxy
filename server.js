@@ -40,7 +40,7 @@ const NIM_API_KEY = process.env.NIM_API_KEY;
 const SHOW_REASONING = false;
 
 // THINKING MODE TOGGLE - Enables thinking for specific models that support it
-const ENABLE_THINKING_MODE = true;
+const ENABLE_THINKING_MODE = false;
 
 // Model mapping - TESTED RP MODELS
 const MODEL_MAPPING = {
@@ -49,7 +49,7 @@ const MODEL_MAPPING = {
   'gpt-4-turbo': 'qwen/qwen3.5-122b-a10b',
   'gpt-4o': 'z-ai/glm5',
   'claude-3-opus': 'deepseek-ai/deepseek-v3.2',
-  'claude-3-sonnet': 'moonshotai/kimi-k2.5',
+  'claude-3-sonnet': 'moonshotai/kimi-k2.6',
   'gemini-pro': 'qwen/qwen3-next-80b-a3b-thinking'
 };
 
